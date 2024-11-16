@@ -1,0 +1,78 @@
+services:
+  app.nginx.proxy.service:
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker-wsl.sock:/tmp/docker.sock:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/vhost.d:/etc/nginx/vhost.d
+      - ./nginx/html:/usr/share/nginx/html
+    networks:
+      - frontend
+      - backend
+    restart: always
+
+  app.pyhton.service:
+    build:
+      context: normal
+      dockerfile: Dockerfile
+      args:
+        PYTORCH_VERSION: ${PYTORCH_VERSION}
+    container_name: fooocus-ai
+    environment:
+      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - VIRTUAL_PORT=${VIRTUAL_PORT}
+      - DOCKER_HOST=${DOCKER_HOST}
+    volumes:
+      - source:/app/src
+      - models:/usr/app/src/models
+      - ./outputs:/usr/app/src/outputs
+    # GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: ${GPU_DRIVER-nvidia}
+              count: ${GPU_COUNT-1}
+              capabilities: [ gpu ]
+    extra_hosts:
+      - "ollama.masterclass-agent.local:172.19.0.1"
+      - "openwebui.masterclass-agent.local:172.19.0.1"
+    networks:
+      backend:
+
+  app.fooocus.api.service:
+    image: konieshadow/fooocus-api
+    container_name: fooocus-ai-api
+    environment:
+      - VIRTUAL_PORT=${FOOOCUS_API_PORT}
+      - VIRTUAL_HOST=${FOOOCUS_API_HOST}
+    # GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: ${GPU_DRIVER-nvidia}
+              count: ${GPU_COUNT-1}
+              capabilities: [ gpu ]
+    extra_hosts:
+      - "ollama.masterclass-agent.local:172.19.0.1"
+      - "openwebui.masterclass-agent.local:172.19.0.1"
+    networks:
+      backend:
+
+
+volumes:
+  models:
+  source:
+
+networks:
+  frontend:
+    external: true
+  backend:
+    external: true
